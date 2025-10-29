@@ -1,37 +1,31 @@
-import gymnasium as gym
+import os
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
-import os
 from snakeenv import SnakeEnv
 
 ALGORITHM = "PPO"
 models_dir = f"models/{ALGORITHM}"
 log_dir = "logs"
 
-if not os.path.exists(models_dir):
-    os.makedirs(models_dir)
+os.makedirs(models_dir, exist_ok=True)
+os.makedirs(log_dir, exist_ok=True)
 
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
-
-# Create the environment
+# Crear entorno
 env = SnakeEnv()
 
-# Instantiate the agent
+# Instanciar agente
 model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=log_dir)
 
 TIMESTEPS = 10000
-NUM_ITERATIONS = 10  # Adjust according to your needs
+NUM_ITERATIONS = 10
 
 for i in range(1, NUM_ITERATIONS + 1):
-    model.learn(
-        total_timesteps=TIMESTEPS,
-        reset_num_timesteps=False,
-        tb_log_name=ALGORITHM
-    )
+    model.learn(total_timesteps=TIMESTEPS,
+                reset_num_timesteps=False,
+                tb_log_name=ALGORITHM)
     model.save(f"{models_dir}/{TIMESTEPS * i}")
 
-# Evaluate the agent
+# Evaluación
 mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
 print(f"Mean reward: {mean_reward} ± {std_reward}")
 

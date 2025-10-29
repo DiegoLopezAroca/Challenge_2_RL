@@ -180,7 +180,7 @@ class SnakeEnv(gym.Env):
     def render(self, mode='human'):
         cv2.imshow('Snake Game', self.img)
         cv2.waitKey(1)
-        time.sleep(0.1)  # Add delay between frames to slow down execution
+        time.sleep(0.01)  # Add delay between frames to slow down execution
 
     # Close the OpenCV windows
     def close(self):
