@@ -2,52 +2,33 @@ import gymnasium as gym
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 import os
-from snakeenv_stage1 import SnakeEnv
+from Diego.Snake_env.Stage_2.snakeenv_stage2 import SnakeEnv
 import pickle
 import zipfile
 
 ALGORITHM = "PPO"
-models_dir = f"../Stage 1/models/{ALGORITHM}"
-log_dir = "logs"
+models_dir_stage1 = "Diego/Snake_env/Stage_1/models/PPO"
+models_dir_stage2 = "Diego/Snake_env/Stage_2/models/PPO"
+log_dir = "Diego/Snake_env/Stage_2/logs"
 
-if not os.path.exists(models_dir):
-    os.makedirs(models_dir)
+os.makedirs(models_dir_stage2, exist_ok=True)
+os.makedirs(log_dir, exist_ok=True)
 
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
-
-# Create the environment
 env = SnakeEnv()
 
-# Instantiate the agent
-# model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=log_dir)
+# Cargar el modelo entrenado en Stage 1
+model_path = os.path.join(models_dir_stage1, "500000.zip")
+model = PPO.load(model_path, env=env, device="cpu", tensorboard_log=log_dir)  # usa CPU para MLP (más estable/rápido)
 
-# 1. Descomprimir el archivo
-nombre_archivo_zip = models_dir + "/100000.zip"
-with zipfile.ZipFile(nombre_archivo_zip, 'r') as zip_ref:
-    zip_ref.extractall('directorio_extraido')
-
-# 2. Identificar el archivo del modelo (suponiendo que se llama 'mi_modelo.pkl')
-ruta_modelo = f'directorio_extraido/{nombre_archivo_zip}.pkl'
-
-# 3. Cargar el modelo usando pickle
-with open(ruta_modelo, 'rb') as f:
-    model = pickle.load(f)
-
-TIMESTEPS = 10000
-NUM_ITERATIONS = 10  # Adjust according to your needs
+# Re-entrenar en Stage 2
+TIMESTEPS = 100_000
+NUM_ITERATIONS = 5
 
 for i in range(1, NUM_ITERATIONS + 1):
-    model.learn(
-        total_timesteps=TIMESTEPS,
-        reset_num_timesteps=False,
-        tb_log_name=ALGORITHM
-    )
-    model.save(f"{models_dir}/{TIMESTEPS * i}")
+    model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name=ALGORITHM)
+    model.save(os.path.join(models_dir_stage2, f"{TIMESTEPS * i}"))
 
-# Evaluate the agent
-mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
-print(f"Mean reward: {mean_reward} ± {std_reward}")
-
+# Evaluación
+mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10, deterministic=True)
+print(f"Mean reward: {mean_reward:.2f} ± {std_reward:.2f}")
 env.close()
-
