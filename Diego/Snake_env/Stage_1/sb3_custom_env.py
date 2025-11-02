@@ -7,8 +7,8 @@ import pickle
 import zipfile
 
 ALGORITHM = "PPO"
-models_dir = f"Diego/Snake_env/Stage_1/models/{ALGORITHM}"
-log_dir = "Diego/Snake_env/Stage_1/logs"
+models_dir = f"Diego/Snake_env/Stage_1/models2/{ALGORITHM}"
+log_dir = "Diego/Snake_env/Stage_1/logs2"
 
 if not os.path.exists(models_dir):
     os.makedirs(models_dir)
@@ -22,19 +22,7 @@ env = SnakeEnv()
 # Instantiate the agent
 model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=log_dir)
 
-'''# 1. Descomprimir el archivo
-nombre_archivo_zip = models_dir + "/150000.zip"
-with zipfile.ZipFile(nombre_archivo_zip, 'r') as zip_ref:
-    zip_ref.extractall('directorio_extraido')
-
-# 2. Identificar el archivo del modelo (suponiendo que se llama 'mi_modelo.pkl')
-ruta_modelo = f'directorio_extraido/{nombre_archivo_zip}.pkl'
-
-# 3. Cargar el modelo usando pickle
-with open(ruta_modelo, 'rb') as f:
-    model = pickle.load(f)'''
-
-TIMESTEPS = 100000
+TIMESTEPS = 30000
 NUM_ITERATIONS = 5  # Adjust according to your needs
 
 for i in range(1, NUM_ITERATIONS + 1):

@@ -10,16 +10,12 @@ from collections import deque
 # Set the goal length for the snake
 SNAKE_LEN_GOAL = 30
 
-USE_OBSTACLES_STAGE1 = True
-NUM_OBSTACLES_STAGE1 = 5
-REPORT_EVERY_STEPS = 20_000
-
 # Define the size of the game table for observation and gameplay
 ##################################################
 # CAMBIAMOS EL VALOR DE tableSizeObs Y tableSize #
 ##################################################
-tableSizeObs = 300
-tableSize = 300
+tableSizeObs = 500
+tableSize = 500
 halfTable = int(tableSize / 2)
 
 # Initialize max score
@@ -40,26 +36,14 @@ def collision_with_apple(apple_position, score):
     score += 1  # Increment the score
     return apple_position, score
 
-'''
+
 # Function to check if the snake head collides with game boundaries
 def collision_with_boundaries(snake_head):
     if snake_head[0] >= tableSize or snake_head[0] < 0 or snake_head[1] >= tableSize or snake_head[1] < 0:
         return True
     else:
-        return False'''
+        return False
 
-##################################################
-# Creamos una funcion para evitar las boundaries #
-##################################################
-def no_collision_with_boundaries(snake_head):
-    if 0 > snake_head[0]:
-        snake_head[0] = tableSize - 10
-    if snake_head[0] >= tableSize:
-        snake_head[0] = 0
-    if 0 > snake_head[1]:
-        snake_head[1] = tableSize - 10
-    if snake_head[1] >= tableSize:
-        snake_head[1] = 0
 
 # Function to check if the snake collides with itself
 def collision_with_self(snake_position):
@@ -75,54 +59,47 @@ class SnakeEnv(gym.Env):
 
     def __init__(self):
         super(SnakeEnv, self).__init__()
-
         self.direction_onehot = True
 
         # Define the action space: 4 discrete actions (left, right, up, down)
         self.action_space = spaces.Discrete(4)
 
-        # Dimension extra for one-hot encoding of direction
         extra_dim = 4 if self.direction_onehot else 0
 
         # Dimension del sensor
         extra_dim += 3  # sensores de peligro cercano (frontal + laterales)
         
-        # Define the observation space: a Box with size based on snake length goal and other game parameters
+        # Define the observation space
         self.observation_space = spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(5 + SNAKE_LEN_GOAL + extra_dim,),
+            shape=(5 + SNAKE_LEN_GOAL +  extra_dim,),
             dtype=np.float32
         )
         
-        # Initialize game display and reward variables
+        # State / metrics
         self.img = np.zeros((tableSize, tableSize, 3), dtype='uint8')
-        self.prev_reward = 0
-        self.total_reward = 0
+        self.prev_reward = 0.0
+        self.total_reward = 0.0
         self.score = 0
         self.max_score = 0
-
-        # contadores para reportes
-        self.global_step = 0
-        self.episode_idx = 0
-        self.ep_len = 0
-        self.best_episode_score = 0
-        self.best_episode_len = 0
 
         # Prev actions history (memoria explícita en la observación)
         self.prev_actions = deque(maxlen=SNAKE_LEN_GOAL)
         for _ in range(SNAKE_LEN_GOAL):
             self.prev_actions.append(-1)
 
+        # Nota: snake_head, snake_position, apple_position se inicializan en reset()
+
     # Step function that updates the environment after an action is taken
     def step(self, action):
-        # Store previous actions
+        # guardar acción
         self.prev_actions.append(action)
 
         # Update the game UI
         # self._update_ui()
 
-        # --- métricas previas (para shaping normalizado) ---
+        # Metricas previas (para shaping normalizado)
         apple_px = self._nearest_apple()
         prev_euc  = np.linalg.norm(np.array(self.snake_head) - np.array(apple_px))
         prev_bfs  = self._bfs_shortest(self.snake_head, apple_px)
@@ -132,56 +109,43 @@ class SnakeEnv(gym.Env):
         # Perform the action
         self._take_action(action)
 
-        ##############################
-        # Aplicamos las no boundaries#
-        ##############################
-        no_collision_with_boundaries(self.snake_head)
-
         # Initialize reward
         reward = 0
 
         # Check if snake eats the apple
         if self.snake_head == self.apple_position:
+            # Comer manzana
             self.apple_position, self.score = collision_with_apple(self.apple_position, self.score)
             self.apple_position = check_apple_on_snake(self.apple_position, self.snake_position)
+            self._apple_not_on_obstacle()  # aseguramos que no aparece sobre un obstáculo
             self.snake_position.insert(0, list(self.snake_head))
-            reward += 10  # Reward for eating an apple
+            reward += 10.0  # recompensa por comer
         else:
             self.snake_position.insert(0, list(self.snake_head))
             self.snake_position.pop()
 
-        # Check for collisions (with boundaries or self)
-        ############
-        # JUST SELF#
-        ############
-        terminated = collision_with_self(self.snake_position)
+        # Ha terminado el episodio?
+        terminated = (
+            collision_with_boundaries(self.snake_head)
+            or collision_with_self(self.snake_position)
+            or (tuple(self.snake_head) in self.obstacles)   # <-- NUEVO
+        )
         truncated = False
-
-        self.global_step += 1
-        self.ep_len += 1
 
         if terminated:
             reward -= 80.0
-            if self.score > self.best_episode_score:
-                self.best_episode_score = self.score
-                self.best_episode_len = self.ep_len
-                print(f"[NEW BEST] ep={self.episode_idx}  score={self.best_episode_score}  len={self.best_episode_len}")
-
-            if REPORT_EVERY_STEPS and (self.global_step % REPORT_EVERY_STEPS == 0):
-                print(f"[REPORT] steps={self.global_step}  episodes={self.episode_idx+1}  "
-                    f"best_score={self.best_episode_score}  best_len={self.best_episode_len}")
         else:
-            # --- métricas actuales ---
+            # Metricas actuales
             apple_px = self._nearest_apple()
             curr_euc  = np.linalg.norm(np.array(self.snake_head) - np.array(apple_px))
             curr_bfs  = self._bfs_shortest(self.snake_head, apple_px)
             curr_area = self._flood_area(self.snake_head)
             curr_safe = self._min_body_dist(self.snake_head)
 
-            # Límites ajustados a 300x300 px (30x30 celdas)
-            BFS_MAX  = 60    # distancia BFS razonable (celdas)
-            AREA_MAX = 900   # área total accesible (30x30)
-            SAFE_MAX = 90    # distancia útil al cuerpo (px)
+            # Límites ajustados a 500x500 px (50x50 celdas)
+            BFS_MAX  = 100    # distancia BFS razonable (celdas)
+            AREA_MAX = 2500   # área total accesible (50x50)
+            SAFE_MAX = 250    # distancia útil al cuerpo (px)
 
             # Normalización a [-1,1] para comparaciones relativas
             norm_prev_bfs  = -1.0 if prev_bfs is None else self._sym(1.0 - self._norm01(min(prev_bfs,  BFS_MAX), 0, BFS_MAX))
@@ -201,15 +165,15 @@ class SnakeEnv(gym.Env):
             )
 
             if moved_away:
-                reward += 0.05 if justified else -0.05
+                reward += 0.10 if justified else -0.10
             else:
                 reward += 0.05
                 # Evita encerrarte aunque te acerques
                 if curr_area + 10 < prev_area:
-                    reward -= 0.05
+                    reward -= 0.10
 
             # step reward suave
-            reward -= 0.08
+            reward -= 0.02
 
         # Information dictionary
         info = {}
@@ -221,7 +185,6 @@ class SnakeEnv(gym.Env):
     # Reset the environment to the initial state
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
-        # Reset game board
         self.img = np.zeros((tableSize, tableSize, 3), dtype='uint8')
         
         # Reset snake position
@@ -232,21 +195,19 @@ class SnakeEnv(gym.Env):
         ]
         
         # Generate random apple position
-     
         self.apple_position = [
             random.randrange(1, tableSize // 10) * 10,
             random.randrange(1, tableSize // 10) * 10
         ]
-
         self.apple_position = check_apple_on_snake(self.apple_position, self.snake_position)
-        
-        # Obstáculos (vacio en caso de querer añadirlos)
-        self.obstacles = set()
 
-        # Grid en celdas (300/10 = 30)
+        self.obstacles = self._spawn_obstacles_n(5)
+        self._apple_not_on_obstacle()
+
+        # Grid en celdas (500/10 = 50)
         self.table_w = tableSize // 10
         self.table_h = tableSize // 10
-
+        
         # Update max score if needed
         if self.score > self.max_score:
             self.max_score = self.score
@@ -263,20 +224,20 @@ class SnakeEnv(gym.Env):
         self.prev_reward = 0
         self.total_reward = 0
 
-        # Create observation of the current state
+        # Historial de acciones
         self.prev_actions = deque(maxlen=SNAKE_LEN_GOAL)
         for _ in range(SNAKE_LEN_GOAL):
             self.prev_actions.append(-1)
 
         observation = self._get_obs()
-
+        
         return observation, {}
 
     # Render the game visually using OpenCV
-    def render(self, mode='human'):
+    '''def render(self, mode='human'):
         cv2.imshow('Snake Game', self.img)
         cv2.waitKey(1)
-        time.sleep(0.001)  # Add delay between frames to slow down execution
+        time.sleep(0.05)  # Add delay between frames to slow down execution'''
 
     # Close the OpenCV windows
     def close(self):
@@ -305,6 +266,11 @@ class SnakeEnv(gym.Env):
                 (0, 255, 0),
                 -1
             )
+
+        # Obstáculos (gris)
+        for (ox, oy) in self.obstacles:
+            cv2.rectangle(self.img, (ox, oy), (ox + 10, oy + 10), (100, 100, 100), -1)
+
         self.render()
 
     # Handle actions and update the snake's position
@@ -332,10 +298,6 @@ class SnakeEnv(gym.Env):
         elif action == 3:  # Move up
             self.snake_head[1] -= 10
 
-    #####################################################
-    # FUNCION PARA OBTENER LA OBSERVACIÓN CON EL ONEHOT #
-    #####################################################
-
     def _get_obs(self):
         hx = (self.snake_head[0] / (tableSize/2)) - 1.0
         hy = (self.snake_head[1] / (tableSize/2)) - 1.0
@@ -351,15 +313,15 @@ class SnakeEnv(gym.Env):
         if self.direction_onehot:
             oh = np.zeros(4, dtype=np.float32); oh[self.direction] = 1.0
             obs = np.concatenate([obs, oh])
-            
+
         sensors = self._sensors()
         obs = np.concatenate([obs, sensors])
 
         return obs
 
-    ############################################
-    # NUEVOS HELPERS PARA SHAPING / NAVEGACIÓN #
-    ############################################
+############################################
+# NUEVOS HELPERS PARA SHAPING / NAVEGACIÓN #
+############################################
 
     def _norm01(self, x, lo, hi):
         """Normalizador genérico: convierte un valor x del rango [lo, hi] a [0, 1].
@@ -448,41 +410,56 @@ class SnakeEnv(gym.Env):
         dists = np.abs(body - head).sum(axis=1)  # Manhattan
         return int(dists.min()) if dists.size else 999
     
+    #########################
+    # GESTIÓN DE OBSTÁCULOS #
+    #########################
+
+    def _rand_cell_px(self):
+        """Devuelve una celda aleatoria en coordenadas de píxeles (múltiplos de 10)."""
+        return [random.randrange(0, tableSize // 10) * 10,
+                random.randrange(0, tableSize // 10) * 10]
+
+    def _spawn_obstacles_n(self, n):
+        new_obs = set()
+        forbid = set(map(tuple, self.snake_position))
+        forbid.add(tuple(self.apple_position))
+        tries = 0
+        while len(new_obs) < n and tries < 5000:
+            cell = (random.randrange(0, tableSize // 10) * 10,
+                    random.randrange(0, tableSize // 10) * 10)
+            if cell not in forbid and cell not in new_obs:
+                new_obs.add(cell)
+            tries += 1
+        return new_obs
+
+    def _refresh_obstacles_on_eat(self, n=3):
+        """Reemplaza los obstáculos actuales por 'n' nuevos al comer una manzana."""
+        self.obstacles = self._spawn_obstacles_n(n)
+
+    def _apple_not_on_obstacle(self):
+        """Reubica la manzana si cae sobre un obstáculo."""
+        while tuple(self.apple_position) in self.obstacles:
+            self.apple_position = self._rand_cell_px()
+
     #####################################################
     # SENSORES DE PELIGRO CERCANO (FRONTAL + LATERALES) #
     #####################################################
-
+    
     def _dir_vec(self):
-        dir_idx = int(self.direction)  # <-- cast
-        return {0: (-10, 0), 1: (10, 0), 2: (0, 10), 3: (0, -10)}[dir_idx]
+        """Vector de dirección actual en pasos de 10 px (0=L,1=R,2=D,3=U)."""
+        return {0: (-10, 0), 1: (10, 0), 2: (0, 10), 3: (0, -10)}[self.direction]
 
     def _danger_at(self, cell_px):
-        """
-        Devuelve True si la celda (en píxeles) es peligrosa (cuerpo u obstáculo).
-        No hay colisiones con los bordes, porque el mapa wrapea (teletransporte).
-        """
-        # Aplicar wrap-around igual que no_collision_with_boundaries
-        x = cell_px[0]
-        y = cell_px[1]
-        if x < 0:
-            x = tableSize - 10
-        elif x >= tableSize:
-            x = 0
-        if y < 0:
-            y = tableSize - 10
-        elif y >= tableSize:
-            y = 0
-
-        cell_px = [x, y]
-
-        # Peligro si hay obstáculo
+        """True si la celda (en píxeles) es peligrosa (muro, obstáculo o cuerpo)."""
+        # choque con límites
+        if collision_with_boundaries(cell_px):
+            return True
+        # obstáculos
         if tuple(cell_px) in self.obstacles:
             return True
-
-        # Peligro si choca con el cuerpo (excluimos cabeza)
+        # cuerpo (conservador: incluye toda la cola)
         if cell_px in self.snake_position[1:]:
             return True
-
         return False
 
     def _sensors(self):

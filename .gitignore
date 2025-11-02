@@ -1,2 +1,12 @@
 *.pngUnai/Imitation_Learning/*.npy
 Unai/Imitation_Learning/*.npy
+
+#ignorar logs y modelos de Diego
+Diego/Snake_env/Stage_1/logs/
+Diego/Snake_env/Stage_1/models/
+Diego/Snake_env/Stage_2/logs/
+Diego/Snake_env/Stage_2/models/
+Diego/Snake_env/Stage_3/logs/
+Diego/Snake_env/Stage_3/models/
+Diego/Snake_env/Stage_1/logs2/
+Diego/Snake_env/Stage_1/models2/
