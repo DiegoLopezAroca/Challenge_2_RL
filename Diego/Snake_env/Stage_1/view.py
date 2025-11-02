@@ -9,7 +9,7 @@ from Diego.Snake_env.Stage_1.snakeenv import SnakeEnv  # <-- ajusta si tu clase 
 # -------------------------------
 ALGORITHM = "PPO"
 models_dir_stage3 = "Diego/Snake_env/Stage_1/models2/PPO"
-model_path = os.path.join(models_dir_stage3, "500000.zip")  # <-- cambia al nombre del modelo que quieras visualizar
+model_path = os.path.join(models_dir_stage3, "250000.zip")  # <-- cambia al nombre del modelo que quieras visualizar
 
 # Crear entorno (modo visual)
 env = SnakeEnv()

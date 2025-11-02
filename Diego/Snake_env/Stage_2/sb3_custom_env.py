@@ -17,7 +17,7 @@ os.makedirs(log_dir, exist_ok=True)
 env = SnakeEnv()
 
 # Cargar el modelo entrenado en Stage 1
-model_path = os.path.join(models_dir_stage1, "500000.zip")
+model_path = os.path.join(models_dir_stage1, "250000.zip")
 model = PPO.load(model_path, env=env, device="cpu", tensorboard_log=log_dir)  # usa CPU para MLP (más estable/rápido)
 
 # Re-entrenar en Stage 2

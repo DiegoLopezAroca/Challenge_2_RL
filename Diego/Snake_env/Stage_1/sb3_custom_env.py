@@ -22,7 +22,7 @@ env = SnakeEnv()
 # Instantiate the agent
 model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=log_dir)
 
-TIMESTEPS = 30000
+TIMESTEPS = 50000
 NUM_ITERATIONS = 5  # Adjust according to your needs
 
 for i in range(1, NUM_ITERATIONS + 1):
