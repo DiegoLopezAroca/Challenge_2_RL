@@ -90,6 +90,9 @@ class SnakeEnv(gym.Env):
     def step(self, action):
         self.prev_actions.append(action)
 
+        # Update the game UI
+        # self._update_ui()
+
         # métricas previas
         apple_px = self._nearest_apple()
         prev_euc  = np.linalg.norm(np.array(self.snake_head) - np.array(apple_px))

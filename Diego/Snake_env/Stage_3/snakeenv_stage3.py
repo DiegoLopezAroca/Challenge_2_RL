@@ -10,6 +10,10 @@ from collections import deque
 # Set the goal length for the snake
 SNAKE_LEN_GOAL = 30
 
+USE_OBSTACLES_STAGE1 = True
+NUM_OBSTACLES_STAGE1 = 5
+REPORT_EVERY_STEPS = 20_000
+
 # Define the size of the game table for observation and gameplay
 ##################################################
 # CAMBIAMOS EL VALOR DE tableSizeObs Y tableSize #
@@ -84,12 +88,24 @@ class SnakeEnv(gym.Env):
         self.score = 0
         self.max_score = 0
 
+        # contadores
+        self.global_step = 0
+        self.episode_idx = 0
+        self.ep_len = 0
+        self.best_episode_score = 0
+        self.best_episode_len = 0
+
         # Prev actions history (memoria explícita en la observación)
         self.prev_actions = deque(maxlen=SNAKE_LEN_GOAL)
         for _ in range(SNAKE_LEN_GOAL):
             self.prev_actions.append(-1)
 
         # Nota: snake_head, snake_position, apple_position se inicializan en reset()
+
+        # timeout y “retirada justificada”
+        self.steps_since_food = 0
+        self.max_steps_no_food = 300
+        self.justified_streak = 0
 
     # Step function that updates the environment after an action is taken
     def step(self, action):
@@ -119,7 +135,8 @@ class SnakeEnv(gym.Env):
             self.apple_position = check_apple_on_snake(self.apple_position, self.snake_position)
             self._apple_not_on_obstacle()  # aseguramos que no aparece sobre un obstáculo
             self.snake_position.insert(0, list(self.snake_head))
-            reward += 10.0  # recompensa por comer
+            reward += 40.0  # recompensa por comer
+            self.steps_since_food = 0
         else:
             self.snake_position.insert(0, list(self.snake_head))
             self.snake_position.pop()
@@ -132,8 +149,28 @@ class SnakeEnv(gym.Env):
         )
         truncated = False
 
+        self.global_step += 1
+
+        if self.global_step % 10000 == 0:
+            print(
+                f"[{self.global_step}] "
+                f"best_ep_score={self.best_episode_score} "
+                f"max_score={self.max_score} "
+                f"ep={self.episode_idx} len={self.ep_len}",
+                flush=True
+            )
+        self.ep_len += 1
+
         if terminated:
             reward -= 80.0
+            if self.score > self.best_episode_score:
+                self.best_episode_score = self.score
+                self.best_episode_len = self.ep_len
+                print(f"[NEW BEST] ep={self.episode_idx}  score={self.best_episode_score}  len={self.best_episode_len}")
+
+            if REPORT_EVERY_STEPS and (self.global_step % REPORT_EVERY_STEPS == 0):
+                print(f"[REPORT] steps={self.global_step}  episodes={self.episode_idx+1}  "
+                      f"best_score={self.best_episode_score}  best_len={self.best_episode_len}")
         else:
             # Metricas actuales
             apple_px = self._nearest_apple()
@@ -155,25 +192,46 @@ class SnakeEnv(gym.Env):
             norm_prev_safe = self._sym(self._norm01(min(prev_safe, SAFE_MAX), 0, SAFE_MAX))
             norm_curr_safe = self._sym(self._norm01(min(curr_safe, SAFE_MAX), 0, SAFE_MAX))
 
+                        # mejoras relativas
+            dbfs  = 0.0 if (curr_bfs is None or prev_bfs is None) else (norm_curr_bfs - norm_prev_bfs)
+            darea = (norm_curr_area - norm_prev_area)
+            dsafe = (norm_curr_safe - norm_prev_safe)
+
             moved_away = (curr_euc > prev_euc + 1e-6)
 
-            # ¿Alejarse estuvo justificado en términos relativos?
-            justified = (
-                (curr_bfs is not None and prev_bfs is not None and (norm_curr_bfs - norm_prev_bfs) >= +0.01)
-                or ((norm_curr_area - norm_prev_area) >= +0.02)
-                or ((norm_curr_safe - norm_prev_safe) >= +0.02)
-            )
+            # Umbrales de justificación (más estrictos con paredes)
+            JUST_BFS   = +0.02
+            JUST_AREA  = +0.03
+            JUST_SAFE  = +0.03
 
-            if moved_away:
-                reward += 0.10 if justified else -0.10
+            justified = (dbfs >= JUST_BFS) or (darea >= JUST_AREA) or (dsafe >= JUST_SAFE)
+
+            # suavizado
+            if justified:
+                self.justified_streak = min(self.justified_streak + 1, 3)
             else:
-                reward += 0.05
-                # Evita encerrarte aunque te acerques
-                if curr_area + 10 < prev_area:
-                    reward -= 0.10
+                self.justified_streak = max(self.justified_streak - 1, 0)
 
-            # step reward suave
+            # potencial: acercarse suma, alejarse resta poco
+            delta = (prev_euc - curr_euc) / 10.0
+            reward += float(np.clip(delta, -0.1, 0.1))
+
+            # penaliza alejarse si NO está justificado y sin racha
+            if moved_away and (not justified) and (self.justified_streak == 0):
+                reward -= 0.03
+
+            # no te encierres reduciendo espacio drásticamente
+            if (curr_area + 10) < prev_area:
+                reward -= 0.02
+
+            # coste por paso bajo
             reward -= 0.02
+
+            # timeout por “vagueo”
+            self.steps_since_food += 1
+            if self.steps_since_food >= self.max_steps_no_food:
+                truncated = True
+                reward -= 5.0
 
         # Information dictionary
         info = {}
@@ -228,6 +286,9 @@ class SnakeEnv(gym.Env):
         self.prev_actions = deque(maxlen=SNAKE_LEN_GOAL)
         for _ in range(SNAKE_LEN_GOAL):
             self.prev_actions.append(-1)
+
+        self.steps_since_food = 0
+        self.justified_streak = 0
 
         observation = self._get_obs()
         
