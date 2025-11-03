@@ -21,7 +21,7 @@ model_path = os.path.join(models_dir_stage2, "1000000.zip")
 model = PPO.load(model_path, env=env, device="cpu", tensorboard_log=log_dir)  # usa CPU para MLP (más estable/rápido)
 
 # Re-entrenar en Stage 3
-TIMESTEPS = 100_000
+TIMESTEPS = 200_000
 NUM_ITERATIONS = 10
 
 for i in range(1, NUM_ITERATIONS + 1):

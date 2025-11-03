@@ -113,7 +113,7 @@ class SnakeEnv(gym.Env):
         self.prev_actions.append(action)
 
         # Update the game UI
-        # self._update_ui()
+        self._update_ui()
 
         # Metricas previas (para shaping normalizado)
         apple_px = self._nearest_apple()
@@ -295,10 +295,10 @@ class SnakeEnv(gym.Env):
         return observation, {}
 
     # Render the game visually using OpenCV
-    '''def render(self, mode='human'):
+    def render(self, mode='human'):
         cv2.imshow('Snake Game', self.img)
         cv2.waitKey(1)
-        time.sleep(0.05)  # Add delay between frames to slow down execution'''
+        time.sleep(0.005)  # Add delay between frames to slow down execution
 
     # Close the OpenCV windows
     def close(self):
@@ -331,6 +331,16 @@ class SnakeEnv(gym.Env):
         # Obstáculos (gris)
         for (ox, oy) in self.obstacles:
             cv2.rectangle(self.img, (ox, oy), (ox + 10, oy + 10), (100, 100, 100), -1)
+            cv2.putText(
+            self.img,
+            f"Score: {self.score}",
+            (10, 20),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA
+        )
 
         self.render()
 
@@ -507,8 +517,8 @@ class SnakeEnv(gym.Env):
     #####################################################
     
     def _dir_vec(self):
-        """Vector de dirección actual en pasos de 10 px (0=L,1=R,2=D,3=U)."""
-        return {0: (-10, 0), 1: (10, 0), 2: (0, 10), 3: (0, -10)}[self.direction]
+        dir_idx = int(self.direction)
+        return {0: (-10, 0), 1: (10, 0), 2: (0, 10), 3: (0, -10)}[dir_idx]
 
     def _danger_at(self, cell_px):
         """True si la celda (en píxeles) es peligrosa (muro, obstáculo o cuerpo)."""

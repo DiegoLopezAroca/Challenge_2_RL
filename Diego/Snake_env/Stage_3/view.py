@@ -8,8 +8,8 @@ from Diego.Snake_env.Stage_3.snakeenv_stage3 import SnakeEnv  # <-- ajusta si tu
 # CONFIGURACIÓN
 # -------------------------------
 ALGORITHM = "PPO"
-models_dir_stage3 = "Diego/Snake_env/Stage_2/models/PPO"
-model_path = os.path.join(models_dir_stage3, "1000000.zip")  # <-- cambia al nombre del modelo que quieras visualizar
+models_dir_stage3 = "Diego/Snake_env/Stage_3/models2/PPO"
+model_path = os.path.join(models_dir_stage3, "2000000.zip")  # <-- cambia al nombre del modelo que quieras visualizar
 
 # Crear entorno (modo visual)
 env = SnakeEnv()
@@ -23,7 +23,7 @@ model = PPO.load(model_path, env=env, device="cpu")
 obs, info = env.reset()
 done = False
 trunc = False
-resta = 2
+resta = 20
 print("Reproduciendo el modelo... Cierra la ventana para salir.")
 while resta:
     # Obtener acción del modelo (determinista para comportamiento estable)
